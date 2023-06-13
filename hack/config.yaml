@@ -1,0 +1,21 @@
+
+# CLI tool, only in development environment.
+# https://goframe.org/pages/viewpage.action?pageId=3673173
+gfcli:
+  # 工具编译配置
+  build:
+    name:     "github.com/kennylixi/gadmin"
+    arch:     "amd64"
+    system:   "linux,darwin,windows"
+    mod:      ""
+    cgo:      0
+
+  # dao生成
+  gen:
+    dao:
+      - link:            "mysql:root:root123@tcp(127.0.0.1:3306)/focus"
+        removePrefix:    "sys_"
+        descriptionTag:  true
+        noModelComment:  true
+        gJsonSupport:    true
+        tables:          "gen_table,gen_table_column,sys_api,sys_config,sys_dept,sys_dict_data,sys_dict_type,sys_district,sys_file,sys_file_driver,sys_job,sys_job_log,sys_logininfor,sys_menu,sys_menu_api,sys_notice,sys_oper_log,sys_post,sys_push_channel,sys_push_template,sys_push_type,sys_role,sys_role_api,sys_role_dept,sys_role_menu,sys_sql_backups,sys_user,sys_user_online,sys_user_post,sys_user_role"

@@ -1,0 +1,580 @@
+<template>
+${- $lastIndex:=reduce (.columns|len) 1}
+${- $pkColumnField:=.pkColumn.GoField|uncapitalize}
+  <div class="app-container">
+    <el-form :model="queryParams" ref="queryForm" size="small" :inline="true" v-show="showSearch" label-width="68px">
+${- range $index, $column := .columns}
+${- if eq $column.IsQuery "1"}
+${- $dictType:=$column.DictType}
+${- $goField:=$column.GoField|uncapitalize}
+${- $comment:=$column.ColumnComment | comment}
+${- if eq $column.HtmlType "input"}
+      <el-form-item label="${$comment}" prop="${$goField}">
+        <el-input
+          v-model="queryParams.${$goField}"
+          placeholder="请输入${$comment}"
+          clearable
+          @keyup.enter.native="handleQuery"
+        />
+      </el-form-item>
+${- else if and (or (eq $column.HtmlType  "select" )  (eq $column.HtmlType  "radio"))  (ne $dictType "") }
+      <el-form-item label="${$comment}" prop="${$goField}">
+        <el-select v-model="queryParams.${$goField}" placeholder="请选择${$comment}" clearable>
+          <el-option
+            v-for="dict in dict.type.${$dictType}"
+            :key="dict.value"
+            :label="dict.label"
+            :value="dict.value"
+          />
+        </el-select>
+      </el-form-item>
+${- else if and (or (eq $column.HtmlType  "select" )  (eq $column.HtmlType  "radio"))  (ne $dictType "") }
+      <el-form-item label="${$comment}" prop="${$goField}">
+        <el-select v-model="queryParams.${$goField}" placeholder="请选择${$comment}" clearable>
+          <el-option label="请选择字典生成" value="" />
+        </el-select>
+      </el-form-item>
+${- else if and (eq $column.HtmlType "datetime") (ne $column.QueryType "BETWEEN")}
+      <el-form-item label="${$comment}" prop="${$goField}">
+        <el-date-picker clearable
+          v-model="queryParams.${$goField}"
+          type="date"
+          value-format="yyyy-MM-dd"
+          placeholder="选择${$comment}">
+        </el-date-picker>
+      </el-form-item>
+${- else if and (eq $column.HtmlType "datetime") (eq $column.QueryType "BETWEEN")}
+      <el-form-item label="${$comment}">
+        <el-date-picker
+          v-model="daterange${$goField}"
+          style="width: 240px"
+          value-format="yyyy-MM-dd"
+          type="daterange"
+          range-separator="-"
+          start-placeholder="开始日期"
+          end-placeholder="结束日期"
+        ></el-date-picker>
+      </el-form-item>
+${- end}
+${- end}
+${- end}
+      <el-form-item>
+        <el-button type="primary" icon="el-icon-search" size="mini" @click="handleQuery">搜索</el-button>
+        <el-button icon="el-icon-refresh" size="mini" @click="resetQuery">重置</el-button>
+      </el-form-item>
+    </el-form>
+
+    <el-row :gutter="10" class="mb8">
+      <el-col :span="1.5">
+        <el-button
+          type="primary"
+          plain
+          icon="el-icon-plus"
+          size="mini"
+          @click="handleAdd"
+          v-hasPermi="['${.permissionPrefix}:add']"
+        >新增</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="success"
+          plain
+          icon="el-icon-edit"
+          size="mini"
+          :disabled="single"
+          @click="handleUpdate"
+          v-hasPermi="['${.permissionPrefix}:edit']"
+        >修改</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="danger"
+          plain
+          icon="el-icon-delete"
+          size="mini"
+          :disabled="multiple"
+          @click="handleDelete"
+          v-hasPermi="['${.permissionPrefix}:remove']"
+        >删除</el-button>
+      </el-col>
+      <el-col :span="1.5">
+        <el-button
+          type="warning"
+          plain
+          icon="el-icon-download"
+          size="mini"
+          @click="handleExport"
+          v-hasPermi="['${.permissionPrefix}:export']"
+        >导出</el-button>
+      </el-col>
+      <right-toolbar :showSearch.sync="showSearch" @queryTable="getList"></right-toolbar>
+    </el-row>
+
+    <el-table v-loading="loading" :data="${.businessName}List" @selection-change="handleSelectionChange">
+      <el-table-column type="selection" width="55" align="center" />
+${- range $index,$column := .columns}
+${- $goField:=$column.GoField|uncapitalize}
+${- $comment:=$column.ColumnComment | comment}
+${- if eq $column.IsPk "1"}
+      <el-table-column label="${$comment}" align="center" prop="${$goField}" />
+${- else if and (eq $column.IsList "1")  (eq $column.HtmlType "datetime")}
+      <el-table-column label="${$comment}" align="center" prop="${$goField}" width="180">
+        <template slot-scope="scope">
+          <span>{{ parseTime(scope.row.${$goField}, '{y}-{m}-{d}') }}</span>
+        </template>
+      </el-table-column>
+${- else if and (eq $column.IsList "1")  (eq $column.HtmlType "imageUpload")}
+      <el-table-column label="${$comment}" align="center" prop="${$goField}" width="100">
+        <template slot-scope="scope">
+          <image-preview :src="scope.row.${$goField}" :width="50" :height="50"/>
+        </template>
+      </el-table-column>
+${- else if and (eq $column.IsList "1")  (ne $column.DictType "")}
+      <el-table-column label="${$comment}" align="center" prop="${$goField}">
+        <template slot-scope="scope">
+        ${- if eq $column.HtmlType "checkbox"}
+          <dict-tag :options="dict.type.${$column.DictType}" :value="scope.row.${$goField} ? scope.row.${$goField}.split(',') : []"/>
+        ${- else}
+          <dict-tag :options="dict.type.${$column.DictType}" :value="scope.row.${$goField}"/>
+        ${- end}
+        </template>
+      </el-table-column>
+${- else if and (eq $column.IsList "1")  (ne $goField "")}
+      <el-table-column label="${$comment}" align="center" prop="${$goField}" />
+${- end}
+${- end}
+      <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
+        <template slot-scope="scope">
+          <el-button
+            size="mini"
+            type="text"
+            icon="el-icon-edit"
+            @click="handleUpdate(scope.row)"
+            v-hasPermi="['${.permissionPrefix}:edit']"
+          >修改</el-button>
+          <el-button
+            size="mini"
+            type="text"
+            icon="el-icon-delete"
+            @click="handleDelete(scope.row)"
+            v-hasPermi="['${.permissionPrefix}:remove']"
+          >删除</el-button>
+        </template>
+      </el-table-column>
+    </el-table>
+    
+    <pagination
+      v-show="total>0"
+      :total="total"
+      :page.sync="queryParams.pageNum"
+      :limit.sync="queryParams.pageSize"
+      @pagination="getList"
+    />
+
+    <!-- 添加或修改${.functionName}对话框 -->
+    <el-dialog :title="title" :visible.sync="open" width="500px" append-to-body>
+      <el-form ref="form" :model="form" :rules="rules" label-width="80px">
+${- range $index,$column := .columns}
+${- $goField:=$column.GoField|uncapitalize}
+${- if and (eq $column.IsInsert "1")  (ne $column.IsPk "1") }
+${- $comment:=$column.ColumnComment}
+${- $dictType:= $column.DictType}
+${- if eq $column.HtmlType "input"}
+        <el-form-item label="${$comment}" prop="${$goField}">
+          <el-input v-model="form.${$goField}" placeholder="请输入${$comment}" />
+        </el-form-item>
+${- else if eq $column.HtmlType "imageUpload"}
+        <el-form-item label="${$comment}">
+          <imageUpload v-model="form.${$goField}"/>
+        </el-form-item>
+${- else if eq $column.HtmlType "fileUpload"}
+        <el-form-item label="${$comment}">
+          <fileUpload v-model="form.${$goField}"/>
+        </el-form-item>
+${- else if eq $column.HtmlType "editor"}
+        <el-form-item label="${$comment}">
+          <editor v-model="form.${$goField}" :min-height="192"/>
+        </el-form-item>
+${- else if and (eq $column.HtmlType "select") (ne $dictType "")}
+        <el-form-item label="${$comment}" prop="${$goField}">
+          <el-select v-model="form.${$goField}" placeholder="请选择${$comment}">
+            <el-option
+              v-for="dict in dict.type.$dictType"
+              :key="dict.value"
+              :label="dict.label"
+              ${if or (eq $column.GoType "Integer") (eq $column.GoType "Long")}:value="parseInt(dict.value)"${else}:value="dict.value"${end}
+
+            ></el-option>
+          </el-select>
+        </el-form-item>
+${- else if and (eq $column.HtmlType "select") (not $dictType)}
+        <el-form-item label="${$comment}" prop="${$goField}">
+          <el-select v-model="form.${$goField}" placeholder="请选择${$comment}">
+            <el-option label="请选择字典生成" value="" />
+          </el-select>
+        </el-form-item>
+${- else if and (eq $column.HtmlType "checkbox") (ne $dictType "")}
+        <el-form-item label="${$comment}">
+          <el-checkbox-group v-model="form.${$goField}">
+            <el-checkbox
+              v-for="dict in dict.type.$dictType"
+              :key="dict.value"
+              :label="dict.value">
+              {{dict.label}}
+            </el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+${- else if and (eq $column.HtmlType "checkbox") (not $dictType)}
+        <el-form-item label="${$comment}">
+          <el-checkbox-group v-model="form.${$goField}">
+            <el-checkbox>请选择字典生成</el-checkbox>
+          </el-checkbox-group>
+        </el-form-item>
+${- else if and (eq $column.HtmlType "radio") (ne $dictType "")}
+        <el-form-item label="${$comment}">
+          <el-radio-group v-model="form.${$goField}">
+            <el-radio
+              v-for="dict in dict.type.${$dictType}"
+              :key="dict.value"
+              ${if or (eq $column.GoType "Integer") (eq $column.GoType "Long")}:label="parseInt(dict.value)"${else}:label="dict.value"${end}
+
+            >{{dict.label}}</el-radio>
+          </el-radio-group>
+        </el-form-item>
+${- else if and (eq $column.HtmlType "radio") (not $dictType)}
+        <el-form-item label="${$comment}">
+          <el-radio-group v-model="form.${$goField}">
+            <el-radio label="1">请选择字典生成</el-radio>
+          </el-radio-group>
+        </el-form-item>
+${- else if eq $column.HtmlType "datetime"}
+        <el-form-item label="${$comment}" prop="${$goField}">
+          <el-date-picker clearable
+            v-model="form.${$goField}"
+            type="date"
+            value-format="yyyy-MM-dd"
+            placeholder="选择${$comment}">
+          </el-date-picker>
+        </el-form-item>
+${- else if eq $column.HtmlType "textarea"}
+        <el-form-item label="${$comment}" prop="${$goField}">
+          <el-input v-model="form.${$goField}" type="textarea" placeholder="请输入内容" />
+        </el-form-item>
+${- end}
+${- end}
+${- end}
+
+${- if .isSub}
+        <el-divider content-position="center">${.subTable.FunctionName}信息</el-divider>
+        <el-row :gutter="10" class="mb8">
+          <el-col :span="1.5">
+            <el-button type="primary" icon="el-icon-plus" size="mini" @click="handleAdd${.subClassName}">添加</el-button>
+          </el-col>
+          <el-col :span="1.5">
+            <el-button type="danger" icon="el-icon-delete" size="mini" @click="handleDelete${.subClassName}">删除</el-button>
+          </el-col>
+        </el-row>
+        <el-table :data="${.subclassName}List" :row-class-name="row${.subClassName}Index" @selection-change="handle${.subClassName}SelectionChange" ref="${.subclassName}">
+          <el-table-column type="selection" width="50" align="center" />
+          <el-table-column label="序号" align="center" prop="index" width="50"/>
+${- range $index,$column := .subColumns}
+${- $goField:=$column.GoField|uncapitalize}
+${- $comment:=$column.ColumnComment}
+${- $dictType:=$column.DictType}
+${- if or (eq $column.IsPk "1") (eq $goField $.subTableFkClassName)}
+${- else if and (eq $column.IsList "1") (eq $column.HtmlType "input")}
+          <el-table-column label="${$comment}" prop="${$goField}" width="150">
+            <template slot-scope="scope">
+              <el-input v-model="scope.row.${$goField}" placeholder="请输入${$comment}" />
+            </template>
+          </el-table-column>
+${- else if and (eq $column.IsList "1") (eq $column.HtmlType "datetime")}
+          <el-table-column label="${$comment}" prop="${$goField}" width="240">
+            <template slot-scope="scope">
+              <el-date-picker clearable v-model="scope.row.${$goField}" type="date" value-format="yyyy-MM-dd" placeholder="请选择${$comment}" />
+            </template>
+          </el-table-column>
+${- else if and (eq $column.IsList "1") (or (eq $column.HtmlType "select") (eq $column.HtmlType "radio")) (ne $column.DictType "")}
+          <el-table-column label="${$comment}" prop="${$goField}" width="150">
+            <template slot-scope="scope">
+              <el-select v-model="scope.row.${$goField}" placeholder="请选择${$comment}">
+                <el-option
+                    v-for="dict in dict.type.${$column.DictType}"
+                    :key="dict.value"
+                    :label="dict.label"
+                    :value="dict.value"
+                ></el-option>
+              </el-select>
+            </template>
+          </el-table-column>
+${- else if and (eq $column.IsList "1") (or (eq $column.HtmlType "select") (eq $column.HtmlType "radio")) (eq $column.DictType "")}
+          <el-table-column label="${$comment}" prop="${$goField}" width="150">
+            <template slot-scope="scope">
+              <el-select v-model="scope.row.${$goField}" placeholder="请选择${$comment}">
+                <el-option label="请选择字典生成" value="" />
+              </el-select>
+            </template>
+          </el-table-column>
+${- end}
+${- end}
+        </el-table>
+${- end}
+      </el-form>
+      <div slot="footer" class="dialog-footer">
+        <el-button type="primary" @click="submitForm">确 定</el-button>
+        <el-button @click="cancel">取 消</el-button>
+      </div>
+    </el-dialog>
+  </div>
+</template>
+
+<script>
+import { list${.BusinessName}, get${.BusinessName}, del${.BusinessName}, add${.BusinessName}, update${.BusinessName} } from "@/api/${.moduleName}/${.businessName}";
+
+export default {
+  name: "${.BusinessName}",
+${- if ne .dicts ""}
+  dicts: [${.dicts}],
+${- end}
+  data() {
+    return {
+      // 遮罩层
+      loading: true,
+      // 选中数组
+      ids: [],
+${- if .isSub}
+      // 子表选中数据
+      checked${.subClassName}: [],
+${- end}
+      // 非单个禁用
+      single: true,
+      // 非多个禁用
+      multiple: true,
+      // 显示搜索条件
+      showSearch: true,
+      // 总条数
+      total: 0,
+      // ${.functionName}表格数据
+      ${.businessName}List: [],
+${- if .isSub}
+      // ${.subTable.FunctionName}表格数据
+      ${.subclassName}List: [],
+${- end}
+      // 弹出层标题
+      title: "",
+      // 是否显示弹出层
+      open: false,
+${- range $index,$column := .columns}
+${- $comment:=$column.ColumnComment | comment}
+${- if and (eq $column.HtmlType "datetime") (eq $column.QueryType "BETWEEN")}
+      // ${$comment}时间范围
+      daterange${$column.GoField}: [],
+${- end}
+${- end}
+      // 查询参数
+      queryParams: {
+        pageNum: 1,
+        pageSize: 10,
+${- range $index,$column := .columns}
+${- if eq $column.IsQuery "1"}
+        ${$column.GoField|uncapitalize}: null${if ne $index $lastIndex},${end}
+${- end}
+${- end}
+      },
+      // 表单参数
+      form: {},
+      // 表单校验
+      rules: {
+${- range $index,$column := .columns}
+${- if eq $column.IsRequired "1"}
+${- $comment:=$column.ColumnComment | comment}
+        ${$column.GoField|uncapitalize}: [
+          { required: true, message: "${$comment}不能为空", trigger: ${if eq $column.HtmlType "select"}"change"${else}"blur"${end} }
+        ]${if ne $index $lastIndex},${end}
+${- end}
+${- end}
+      }
+    };
+  },
+  created() {
+    this.getList();
+  },
+  methods: {
+    /** 查询${.functionName}列表 */
+    getList() {
+      this.loading = true;
+${- if hasHtmlAndQueryType .columns "datetime" "BETWEEN"}
+      this.queryParams.params = {};
+${- end}
+${- range $index,$column := .columns}
+${- if and (eq $column.HtmlType "datetime") (eq $column.QueryType "BETWEEN")}
+${- $attrName:=$column.GoField}
+      if (null != this.daterange${$attrName} && '' != this.daterange${$attrName}) {
+        this.queryParams.params["begin${$attrName}"] = this.daterange${$attrName}[0];
+        this.queryParams.params["end${$attrName}"] = this.daterange${$attrName}[1];
+      }
+${- end}
+${- end}
+      list${.BusinessName}(this.queryParams).then(response => {
+        this.${.businessName}List = response.data.list;
+        this.total = response.data.total;
+        this.loading = false;
+      });
+    },
+    // 取消按钮
+    cancel() {
+      this.open = false;
+      this.reset();
+    },
+    // 表单重置
+    reset() {
+      this.form = {
+${- range $index,$column := .columns}
+${- $goField:=$column.GoField | uncapitalize}
+${- if or (eq $column.IsInsert "1") (eq $column.IsEdit "1")}
+${- if eq $column.HtmlType "radio"}
+        ${$goField}: ${if isNumberType $column.GoType}0${else}"0"${end}${if ne $index $lastIndex},${end}
+${- else if eq $column.HtmlType "checkbox"}
+        ${$goField}: []${if ne $index $lastIndex},${end}
+${- else}
+        ${$goField}: null${if ne $index $lastIndex},${end}
+${- end}
+${- end}
+${- end}
+      };
+${- if .isSub}
+      this.${.subclassName}List = [];
+${- end}
+      this.resetForm("form");
+    },
+    /** 搜索按钮操作 */
+    handleQuery() {
+      this.queryParams.pageNum = 1;
+      this.getList();
+    },
+    /** 重置按钮操作 */
+    resetQuery() {
+${- range $index,$column := .columns}
+${- if and (eq $column.HtmlType "datetime") (eq $column.QueryType "BETWEEN")}
+      this.daterange${$column.GoField} = [];
+${- end}
+${- end}
+      this.resetForm("queryForm");
+      this.handleQuery();
+    },
+    // 多选框选中数据
+    handleSelectionChange(selection) {
+      this.ids = selection.map(item => item.${$pkColumnField})
+      this.single = selection.length!==1
+      this.multiple = !selection.length
+    },
+    /** 新增按钮操作 */
+    handleAdd() {
+      this.reset();
+      this.open = true;
+      this.title = "添加${.functionName}";
+    },
+    /** 修改按钮操作 */
+    handleUpdate(row) {
+      this.reset();
+      const ${$pkColumnField} = row.${$pkColumnField} || this.ids
+      get${.BusinessName}(${$pkColumnField}).then(response => {
+        this.form = response.data;
+${- range $index,$column := .columns}
+${- if eq $column.HtmlType "checkbox"}
+${- $goField:=$column.GoField | uncapitalize}
+        this.form.${$goField} = this.form.${$goField}.split(",");
+${- end}
+${- end}
+${- if .isSub}
+        this.${.subclassName}List = response.data.${.subclassName}List;
+${- end}
+        this.open = true;
+        this.title = "修改${.functionName}";
+      });
+    },
+    /** 提交按钮 */
+    submitForm() {
+      this.$refs["form"].validate(valid => {
+        if (valid) {
+${- range $index,$column := .columns}
+${- if eq $column.HtmlType "checkbox"}
+${- $goField:=$column.GoField | uncapitalize}
+          this.form.${$goField} = this.form.${$goField}.join(",");
+${- end}
+${- end}
+${- if .isSub}
+          this.form.${.subclassName}List = this.${.subclassName}List;
+${- end}
+          if (this.form.${$pkColumnField} != null) {
+            update${.BusinessName}(this.form).then(response => {
+              this.$modal.msgSuccess("修改成功");
+              this.open = false;
+              this.getList();
+            });
+          } else {
+            add${.BusinessName}(this.form).then(response => {
+              this.$modal.msgSuccess("新增成功");
+              this.open = false;
+              this.getList();
+            });
+          }
+        }
+      });
+    },
+    /** 删除按钮操作 */
+    handleDelete(row) {
+      const ${$pkColumnField}s = (row.${$pkColumnField} && [row.${$pkColumnField}]) || this.ids;
+      this.$confirm('是否确认删除${.functionName}编号为"' + ${$pkColumnField}s + '"的数据项?', "警告", {
+          confirmButtonText: "确定",
+          cancelButtonText: "取消",
+          type: "warning"
+        }).then(function() {
+          return del${.BusinessName}(${$pkColumnField}s);
+        }).then(() => {
+          this.getList();
+          this.$modal.msgSuccess("删除成功");
+        })
+    },
+${if .isSub}
+    /** ${.subTable.FunctionName}序号 */
+    row${.subClassName}Index({ row, rowIndex }) {
+      row.index = rowIndex + 1;
+    },
+    /** ${.subTable.FunctionName}添加按钮操作 */
+    handleAdd${.subClassName}() {
+      let obj = {};
+${- range $index,$column := .subColumns}
+${- if or (eq $column.IsPk "1") (eq $column.GoField $.subTableFkClassName)}
+${- else if and (eq $column.IsList "1") (ne $column.GoField "")}
+      obj.${$column.GoField|uncapitalize} = "";
+${- end}
+${- end}
+      this.${.subclassName}List.push(obj);
+    },
+    /** ${.subTable.FunctionName}删除按钮操作 */
+    handleDelete${.subClassName}() {
+      if (this.checked${.subClassName}.length == 0) {
+        this.$modal.msgError("请先选择要删除的${.subTable.FunctionName}数据");
+      } else {
+        const ${.subclassName}List = this.${.subclassName}List;
+        const checked${.subClassName} = this.checked${.subClassName};
+        this.${.subclassName}List = ${.subclassName}List.filter(function(item) {
+          return checked${.subClassName}.indexOf(item.index) == -1
+        });
+      }
+    },
+    /** 单选框选中数据 */
+    handle${.subClassName}SelectionChange(selection) {
+        this.checked${.subClassName} = selection.map(item => item.index)
+    },
+${- end}
+    /** 导出按钮操作 */
+    handleExport() {
+      this.download('${.moduleName}/${.businessName}/export', {
+        ...this.queryParams
+      }, `${.businessName}.xlsx`)
+    }
+  }
+};
+</script>

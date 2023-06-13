@@ -1,0 +1,16 @@
+# 配置文件的键名命名方式统一使用小驼峰。
+
+# 代码生成
+gen:
+    # 作者
+    author: "kennylixi"
+    # 默认生成包路径
+    packageName: "github.com/kennylixi/gadmin"
+    # 自动去除表前缀，默认是false
+    autoRemovePre: true
+    # 表前缀（生成类名不会包含表前缀，多个用逗号分隔）
+    tablePrefix: "sys_,mp_"
+    # 代码生成零时文件夹
+    tempDir: "./temp"
+    # vue项目绝对地址
+    vueProjectPath: "/Users/kennyli/Documents/dev/github.com/kennylixi/gadmin/admin-ui"

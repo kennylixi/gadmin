@@ -1,0 +1,86 @@
+server:
+  address:     ":8000"
+  indexFiles: [ "index.html","index.htm" ]
+  serverRoot: "./resource/public"
+  openapiPath: "/api.json"
+
+# ip相关配置
+ip:
+  type: "ip2region"
+  dbPath: "./resource/ip2region.xdb"
+
+knife4j:
+  title: "GAdmin"
+  description: "GAdmin接口协议文档"
+  version: "v1.0.0"
+  contact:
+    name: "kennylixi"
+
+asynq:
+  logLevel: 2
+  maxRetry: 5
+  redis:
+    addr: "localhost:6379"
+    db: 1
+  scheduler:
+    syncInterval: 10
+    location: "Asia/Shanghai"
+  server:
+    concurrency: 10
+    retryDelay: 10
+    queues:
+      default: 1
+      system: 2
+
+logger:
+  path  : "logs/default"
+  level : "all"
+  stdout: true
+
+# 数据库连接配置
+database:
+  logger:
+    path: "logs/sql" # SQL执行日志存储目录
+    level: "all"
+    stdout: true
+  default:
+    link: "mysql:root:root123@tcp(127.0.0.1:3306)/gadmin?loc=Local&parseTime=true"
+    debug: true
+
+# 数据库备份
+backup:
+  path: "./backup"
+  exclude_tables: # exclude_tables和tables不建议同时使用
+    - sys_oper_log
+    - gen_table
+    - gen_table_column
+    - sys_job_log
+    - sys_logininfor
+
+#jwt配置
+gtoken:
+  cacheMode:      2
+  cacheKey:       "gtoken:"
+  timeout:        0
+  maxRefresh:     0
+  tokenDelimiter: "_"
+  encryptKey:     "koi29a83idakguqjq29asd9asd8a7jhq"
+  authFailMsg:    "登录超时，请重新登录"
+  multiLogin:     true
+
+# Redis 配置示例
+redis:
+  default:
+    address: 127.0.0.1:6379
+    db:      1
+
+#  cache:
+#    address:     127.0.0.1:6379
+#    db:          1
+#    pass:        ""
+#    idleTimeout: 600
+
+#密码错误锁定
+password:
+  maxRetryCount: 3
+  lockTime: 5
